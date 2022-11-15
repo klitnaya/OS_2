@@ -1,1 +1,230 @@
+#include <map>
+#include <set>
+#include <vector>
+#include <algorithm>
+#include <queue>
+#include<iostream>
 
+
+
+class TSufTree {
+
+    
+    struct TNode {
+        int Num;
+        int left, right;
+        TNode* Link;
+        std::map<char, TNode*> children;
+
+        TNode(int num, int Left, int Right) {
+            Num = num;
+            left = Left;
+            right = Right;
+            Link = nullptr;
+        }
+
+        ~TNode() {
+            for (auto& x: children) {
+                delete x.second;
+            }
+        }
+    };
+
+    TNode* root;
+
+    std::string str;
+
+
+    // the following 5 fields are for correct work of Ukkonen algorithm
+    TNode* currentNode;
+    int current{};
+    int pos{};
+    int suffixCount = 0;
+    int childrenCounter = 0;
+
+    // fills set ans with numbers of leafes growing from node curr
+    void FindLeafesByBFS(std::set<unsigned>& ans) {
+        std::queue<TNode*> bfs;
+        bfs.push(currentNode);
+        while (!bfs.empty()) {
+            TNode* bfsNode = bfs.front();
+            bfs.pop();
+            if (bfsNode->Num != -1) {
+                ans.insert(bfsNode->Num);
+                continue;
+            }
+            for (auto& x: bfsNode->children) {
+                if (x.second->Num != -1) {
+                    ans.insert(x.second->Num);
+                } else {
+                    bfs.push(x.second);
+                }
+            }
+        }
+    }
+
+    //
+    bool Control() {
+        TNode* temp = currentNode->children[str[current]];
+        unsigned len = temp->right - temp->left + 1;
+        if (pos >= len) {
+            current += (int)len;
+            pos -= (int)len;
+            currentNode = temp;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    // Add the next suffix by its number in text
+    void AddSuf(unsigned numOfSuffix) {
+        TNode* end = nullptr;
+        ++suffixCount;
+        while (suffixCount) {
+            if (pos == 0) {
+                current = (int)numOfSuffix;
+            }
+            // if currentNode contains the next letter we need
+            if (currentNode->children.find(str[current]) !=
+                currentNode->children.end())
+            {
+                if (Control()) {
+                    continue;
+                } else {
+                    TNode* temp = currentNode->children[str[current]];
+                    if (str[temp->left + pos] == str[numOfSuffix]) {
+                        if (end != nullptr) {
+                            end->Link = currentNode;
+                        }
+                        ++pos;
+                        break;
+                    } else {
+                        TNode* temp2 =
+                                currentNode->children[str[current]];
+                        auto* toSplit = new TNode(-1,
+                                                  temp2->left,
+                                                  temp2->left +
+                                                    pos - 1);
+                        currentNode->children[str[current]] = toSplit;
+                        temp2->left += pos;
+                        toSplit->children[str[temp2->left]] = temp2;
+                        ++childrenCounter;
+                        auto* temp3 =
+                                new TNode(childrenCounter,
+                                          (int)numOfSuffix,
+                                          (int)str.length() - 1);
+                        toSplit->children[str[numOfSuffix]] = temp3;
+                        if (end != nullptr) {
+                            end->Link = toSplit;
+                        }
+                        end = toSplit;
+                    }
+                }
+            } else {
+                //creating a new node and suffix link
+                ++childrenCounter;
+                auto* temp =
+                        new TNode(childrenCounter,
+                                  (int)numOfSuffix,
+                                  (int)str.length() - 1);
+                currentNode->children[str[numOfSuffix]] = temp;
+                if (end != nullptr) {
+                    end->Link = currentNode;
+                    end = nullptr;
+                }
+            }
+            --suffixCount;
+            if (currentNode == root) {
+                if (pos > 0) {
+                    --pos;
+                    ++current;
+                }
+            } else {
+                if (currentNode->Link != nullptr) {
+                    currentNode = currentNode->Link;
+                } else {
+                    currentNode = root;
+                }
+            }
+        }
+    }
+
+
+    void FillSetWithEntries(std::string& word, std::set<unsigned>& ans) {
+        currentNode = root;
+        unsigned wordPointer = 0;
+
+        // searching node which contains the word
+        while (wordPointer < word.length()) {
+            if (currentNode->children.find(word[wordPointer]) ==
+                currentNode->children.end())
+            {
+                return;
+            } else {
+                currentNode = currentNode->children[word[wordPointer]];
+                for (unsigned textPointer = currentNode->left;
+                     textPointer <= currentNode->right;
+                     ++wordPointer, ++textPointer)
+                {
+                    if (wordPointer >= word.length()) {
+                        break;
+                    }
+                    if (str[textPointer] != word[wordPointer]) {
+                        return;
+                    }
+                }
+            }
+        }
+
+        FindLeafesByBFS(ans);
+    }
+
+
+public:
+
+    explicit TSufTree(std::string& textToBuild) {
+        str = textToBuild + "$";
+        root = new TNode(-1, -1, -1);
+        currentNode = root;
+        for (unsigned i = 0; i < str.length(); ++i) {
+            AddSuf(i);
+        }
+    }
+
+    std::set<unsigned> Search(std::string& word) {
+        std::set<unsigned> ans;
+        FillSetWithEntries(word, ans);
+        return ans;
+    }
+
+    ~TSufTree() {
+        delete root;
+    }
+};
+
+int main() {
+
+    std:: string text;
+    std:: cin >> text;
+    TSufTree tr(text);
+    std::string word;
+    unsigned numOfWord = 1;
+    while (std::cin >> word) {
+        std::set<unsigned> ans;
+        ans = tr.Search(word);
+        if (!ans.empty()) {
+            std::cout << numOfWord << ": ";
+            for (auto x: ans) {
+                std::cout << x;
+                if (x != *(ans.rbegin())) {
+                    std::cout << ", ";
+                } else {
+                    std::cout << std::endl;
+                }
+            }
+        }
+        ++numOfWord;
+    }
+    return 0;
+}
